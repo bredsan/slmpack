@@ -1,0 +1,101 @@
+[[flow]]
+name = "coder"
+patterns = [
+  "(?i).*escreva.*função.*",
+  "(?i).*write.*function.*",
+  "(?i).*codigo.*",
+  "(?i).*code.*"
+]
+
+[[flow.step]]
+skill = "code-execute"
+model = "qwen2.5-coder:3b"
+
+[[flow]]
+name = "search"
+patterns = [
+  "(?i).*cotação.*",
+  "(?i).*dólar.*",
+  "(?i).*preço.*",
+  "(?i).*price.*",
+  "(?i).*search.*",
+  "(?i).*web.*"
+]
+
+[[flow.step]]
+skill = "web-search"
+model = "qwen3:4b"
+
+[[flow]]
+name = "summarizer"
+patterns = [
+  "(?i).*resuma.*",
+  "(?i).*summary.*",
+  "(?i).*resumir.*"
+]
+
+[[flow.step]]
+skill = "summarize"
+model = "qwen3:1.7b"
+
+[[flow]]
+name = "vision"
+patterns = [
+  "(?i).*imagem.*",
+  "(?i).*foto.*",
+  "(?i).*image.*",
+  "(?i).*photo.*",
+  "(?i).*vision.*",
+  "(?i).*ver.*"
+]
+
+[[flow.step]]
+skill = "vision-query"
+model = "gemma3:4b"
+
+[[flow]]
+name = "chat"
+patterns = [
+  "(?i).*olá.*",
+  "(?i).*oi.*",
+  "(?i).*hello.*",
+  "(?i).*hi.*",
+  "(?i).*como.*",
+  "(?i).*what.*",
+  "(?i).*why.*",
+  "(?i).*when.*",
+  "(?i).*where.*",
+  "(?i).*quem.*",
+  "(?i).*qual.*",
+  "(?i).*quantos.*",
+  "(?i).*quanto.*"
+]
+
+[[flow.step]]
+skill = "chat"
+model = "qwen3:4b"
+
+[[skill]]
+name = "code-execute"
+path = "./skills/code-execute/run.sh"
+desc = "Execute code generation and execution"
+
+[[skill]]
+name = "web-search"
+path = "./skills/web-search/run.sh"
+desc = "Search the web for information"
+
+[[skill]]
+name = "summarize"
+path = "./skills/summarize/run.sh"
+desc = "Summarize text"
+
+[[skill]]
+name = "vision-query"
+path = "./skills/vision-query/run.sh"
+desc = "Answer questions about images"
+
+[[skill]]
+name = "chat"
+path = "./skills/chat/run.sh"
+desc = "General purpose chat"
