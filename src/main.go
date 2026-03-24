@@ -3,9 +3,12 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -122,7 +125,179 @@ func executeStep(app *App, step Step, input string) (string, error) {
 	return string(output), nil
 }
 
+func downloadFile(url string, filepath string) error {
+	// Split the filepath to get the directory
+	dir := filepath
+	if lastSlash := strings.LastIndex(filepath, "/"); lastSlash >= 0 {
+		dir = filepath[:lastSlash]
+	}
+
+	// Create the directory if it doesn't exist
+	if dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+	}
+
+	// Create the file
+	out, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	// Get the data
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Check server response
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("bad status: %s", resp.Status)
+	}
+
+	// Write the body to file
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func setupWizard() {
+	fmt.Println("Welcome to slmpack setup!")
+	fmt.Println("This will help you install the default configuration and skills.")
+
+	reader := bufio.NewReader(os.Stdin)
+
+	// Ask if they want to download default config and skills
+	fmt.Print("Download default configuration and skills from GitHub? [y/n]: ")
+	answer, _ := reader.ReadString('\n')
+	answer = strings.TrimSpace(strings.ToLower(answer))
+
+	if answer == "y" || answer == "yes" {
+		fmt.Println("Downloading files from GitHub...")
+		baseURL := "https://raw.githubusercontent.com/bredsan/slmpack/master"
+
+		files := []string{
+			"config/slmpack.toml",
+			"skills/code-execute/run.sh",
+			"skills/web-search/run.sh",
+			"skills/summarize/run.sh",
+			"skills/vision-query/run.sh",
+			"skills/chat/run.sh",
+			"docs/status.md",
+			"docs/flow-engine.md",
+			"docs/skills.md",
+			"docs/models.md",
+			"docs/especialistas.md",
+			"docs/rag.md",
+			"docs/tools.md",
+			"docs/router.md",
+			"docs/fases.md",
+			"docs/research.md",
+			"docs/stack-tecnica.md",
+			"docs/arquitetura.md",
+		}
+
+		for _, file := range files {
+			url := baseURL + "/" + file
+			fmt.Printf("Downloading %s... ", file)
+			err := downloadFile(url, file)
+			if err != nil {
+				fmt.Printf("Failed: %v\n", err)
+			} else {
+				fmt.Println("OK")
+			}
+		}
+
+		// Make skill scripts executable
+		fmt.Println("Making skill scripts executable...")
+		exec.Command("chmod", "+x", "skills/code-execute/run.sh").Run()
+		exec.Command("chmod", "+x", "skills/web-search/run.sh").Run()
+		exec.Command("chmod", "+x", "skills/summarize/run.sh").Run()
+		exec.Command("chmod", "+x", "skills/vision-query/run.sh").Run()
+		exec.Command("chmod", "+x", "skills/chat/run.sh").Run()
+	}
+
+	// Ask about Ollama models
+	fmt.Print("\nDo you want to install Ollama models now? [y/n]: ")
+	answer, _ = reader.ReadString('\n')
+	answer = strings.TrimSpace(strings.ToLower(answer))
+
+	if answer == "y" || answer == "yes" {
+		fmt.Println("Checking Ollama installation...")
+		// Check if ollama command exists
+		if _, err := exec.Command("ollama", "--version").Output(); err != nil {
+			fmt.Println("Ollama is not installed or not in PATH. Please install Ollama first.")
+			fmt.Println("Visit https://ollama.ai for installation instructions.")
+		} else {
+			// Check if Ollama server is running
+			resp, err := http.Get("http://localhost:11434/api/version")
+			if err != nil {
+				fmt.Println("Ollama server is not running. Please start it with 'ollama serve' in another terminal.")
+				fmt.Println("You can install models later by running: ollama pull <model>")
+			} else {
+				resp.Body.Close()
+				fmt.Println("Ollama server is running.")
+			}
+
+			// List of models to choose from
+			models := []string{
+				"qwen3:4b",
+				"qwen2.5-coder:3b",
+				"qwen3:1.7b",
+				"gemma3:4b",
+				"nomic-embed-text",
+			}
+
+			fmt.Println("\nAvailable models:")
+			for i, m := range models {
+				fmt.Printf("  %d. %s\n", i+1, m)
+			}
+			fmt.Print("Enter the numbers of models to install (comma-separated, or 'all'): ")
+			modelInput, _ := reader.ReadString('\n')
+			modelInput = strings.TrimSpace(modelInput)
+
+			var selectedModels []string
+			if modelInput == "all" {
+				selectedModels = models
+			} else {
+				parts := strings.Split(modelInput, ",")
+				for _, part := range parts {
+					numStr := strings.TrimSpace(part)
+					if num, err := strconv.Atoi(numStr); err == nil && num > 0 && num <= len(models) {
+						selectedModels = append(selectedModels, models[num-1])
+					}
+				}
+			}
+
+			if len(selectedModels) > 0 {
+				fmt.Println("Installing selected models...")
+				for _, model := range selectedModels {
+					fmt.Printf("Pulling %s... ", model)
+					if err := exec.Command("ollama", "pull", model).Run(); err != nil {
+						fmt.Printf("Failed: %v\n", err)
+					} else {
+						fmt.Println("OK")
+					}
+				}
+			}
+		}
+	}
+
+	fmt.Println("\nSetup complete! You can now run slmpack.")
+}
+
 func main() {
+	// Check if configuration exists
+	if _, err := os.Stat("config/slmpack.toml"); os.IsNotExist(err) {
+		setupWizard()
+	}
+
 	// Load configuration
 	config, err := loadConfig()
 	if err != nil {
@@ -171,6 +346,22 @@ func main() {
 			continue
 		}
 
+		if input == "/setup" {
+			setupWizard()
+			// After setup, reload config
+			config, err = loadConfig()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error reloading config: %v\n", err)
+				os.Exit(1)
+			}
+			app.Config = config
+			app.Skills = buildSkillMap(config.Skills)
+			app.Flows = config.Flows
+			app.Router = NewRouter(config.Flows)
+			fmt.Println("Configuration reloaded. Continuing...")
+			continue
+		}
+
 		// Route input to flows
 		matchedFlows := app.Router.Match(input)
 		if len(matchedFlows) == 0 {
@@ -203,6 +394,7 @@ func printHelp() {
 	fmt.Println("Available commands:")
 	fmt.Println("  /help    - Show this help")
 	fmt.Println("  /status  - Show system status")
+	fmt.Println("  /setup   - Run setup wizard again")
 	fmt.Println("  /exit    - Exit slmpack")
 	fmt.Println("")
 	fmt.Println("Examples:")
@@ -223,4 +415,5 @@ func printStatus(app App) {
 	} else {
 		fmt.Println("Ollama: not connected (run 'ollama serve')")
 	}
+
 }
